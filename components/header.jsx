@@ -5,7 +5,7 @@ export default function Header() {
     return (
         <header>
             <div className="logo">
-                <img className="logoImg" src="/img/logo.svg" alt="Zengreet Logo" />
+                <Image className="logoImg" src="/img/logo.svg" alt="Zengreet Logo" />
             </div>
             <h1>ZenGreet</h1>
             <style jsx>{`
