@@ -34,22 +34,9 @@ export default async function handler(req, res) {
       const dataBody = new Response(data.Body);
       const resBf = await dataBody.buffer();
       const resStr = resBf.toString();
-      console.log(" res from new response ", resStr)
 
       return res.status(200).json(resStr)
     
-      // const stream = data.Body 
-      // console.log('request made GET stream ', stream)
-      // const chunks = []
-      // const chunkies = await new Promise((resolve, reject) => {
-      //     stream.on('data', chunk => chunks.push(chunk))
-      //     stream.once('end', () =>{
-      //       resolve(Buffer.concat(chunks))
-      //     })
-      //     stream.once('error', reject)
-      //   })
-      // console.log('request made GET chunks ', chunkies)
-      // return res.status(201).json(chunkies)
     }
 
 }

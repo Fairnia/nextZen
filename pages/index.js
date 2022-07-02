@@ -111,10 +111,10 @@ export default function Home() {
 
         console.log("---> Sending the offer to the remote peer");
         sendToServer({
-          name: myID,
-          target: targetID,
-          type: "video-offer",
-          sdp: myPeerConnection.localDescription
+          name: myID, // myID needs to be my s3 bucket key > will be added to 
+          target: targetID, // targetID needs to be my partners s3 bucket key
+          type: "video-offer", // type will be added to the key 
+          sdp: myPeerConnection.localDescription // body
         });
       } catch(err) {
         console.log("*** The following error occurred while handling the negotiationneeded event:");
@@ -150,8 +150,9 @@ export default function Home() {
         console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
 
         sendToServer({
-          type: "new-ice-candidate",
-          target: targetID,
+          name: myID, // myID needs to be my s3 bucket key > will be added to 
+          target: targetID, // my partner's id in AWS
+          type: "new-ice-candidate", // to be added to the key 
           candidate: event.candidate
         });
       }
@@ -348,9 +349,9 @@ export default function Home() {
       await myPeerConnection.setLocalDescription(await myPeerConnection.createAnswer());
 
       sendToServer({
-        name: myID,
-        target: targetID,
-        type: "video-answer",
+        name: myID, // my key in AWS
+        target: targetID, // my partner's key in AWS
+        type: "video-answer", // to be added to my partners key in AWS
         sdp: myPeerConnection.localDescription
       });
     }
