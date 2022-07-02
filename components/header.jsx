@@ -2,10 +2,11 @@ import React from 'react'
 import Image from 'next/image'
 
 export default function Header() {
+
     return (
         <header>
             <div className="logo">
-                <Image className="logoImg" src="/img/logo.svg" alt="Zengreet Logo" />
+                <Image width="75" height="75" className="logoImg" src="/img/logo.svg" alt="Zengreet Logo" />
             </div>
             <h1>ZenGreet</h1>
             <style jsx>{`
@@ -26,9 +27,9 @@ export default function Header() {
 
                }
                .logoImg {
-                    width: 150%;
-                    height: 150%;
-                    transform: scaleX(-1);
+                   width: 150%;
+                   height: 150%;
+                   transform: scaleX(-1);
               }
                 @media (max-width: 600px) {
                     div {
