@@ -48,6 +48,106 @@ export default function Home() {
     });  
   } 
 
+
+
+  //******** Actual Matching and WebRTC stuff *******
+
+  var connection = null;
+  var myId;
+  var partnerId;
+  var myUsername = null;
+  //webrtc vars
+  var myID = null;
+  var targetID = null;      // To store username of other peer
+  var myPeerConnection = null;    // RTCPeerConnection
+  var transceiver = null;         // RTCRtpTransceiver
+  var webcamStream = null;
+  var alreadyGreeting = false;
+
+  function connect() {
+
+    connection = new WebSocket(serverUrl, "json"); // this needs to be changed into the long polling function
+
+    connection.onerror = function(evt) {
+      console.dir(evt);
+    }
+    connection.onopen = function(evt) {
+      //send username asap, once connection as been made
+      sendToServer({
+        text: usernameInput,
+        type: "username"
+      });
+    };
+    connection.onmessage = function(evt) {
+      var msg = JSON.parse(evt.data);
+      console.log("Message received: ");
+      console.dir(msg);
+
+      switch(msg.type) {
+        case "id":
+          myId = msg.id
+          userIdel.innerText = myId;
+          console.log('id');
+          break;
+        case "matched":
+          if(msg.user1.id === myId){
+            partnerId = msg.user2.id
+            username.innerText = msg.user1.username;
+            partnerName.innerText = msg.user2.username;
+            prevUsersArrayel.innerText = msg.user1.prevMatched;
+            console.log('called from match user1')
+            invite(msg);
+          }else{
+            partnerId = msg.user1.id
+            username.innerText = msg.user2.username;
+            partnerName.innerText = msg.user1.username;
+            prevUsersArrayel.innerText = msg.user2.prevMatched;
+          }
+          findingPartnerel.style.display = "none"
+          newPartnerel.style.display = "block"
+          // will have to put set time out somewhere else if user1 going to invite
+          // setTimeout(()=>{
+          //   findNewPartner(myId)
+          // },6000)
+          //user1 will always disconnect
+          break;
+        case "matching":
+          closeVideoCall();
+          partnerId = null;
+          alreadyGreeting = false;
+          findingPartnerel.style.display = "block"
+          newPartnerel.style.display = "none"
+          break;
+        case "banned":
+          window.location.href = "/banned.html";
+          connection.close();
+          break;
+        case "video-offer":  // Invitation and offer to chat
+          console.log('video offer message recieved')
+          handleVideoOfferMsg(msg);
+          break;
+        case "video-answer":  // Callee has answered our offer
+          handleVideoAnswerMsg(msg);
+          break;
+        case "new-ice-candidate": // A new ICE candidate has been received
+          console.log("NEW ICE CANDIDATE ", iceCounter++)
+          startGreetingSession();
+          handleNewICECandidateMsg(msg);
+          break;
+        case "hang-up": // The other peer has hung up the call
+          closeVideoCall();
+          break;
+
+        // Unknown message; output to console for debugging.
+        default:
+          console.log("Unknown message received:");
+          console.log('unknown message on refresh');
+          console.dir(msg, { depth: null });
+          //console.error(msg);
+        }
+      };
+  }
+
     // Create the RTCPeerConnection which knows how to talk to our
     // selected STUN/TURN server and then uses getUserMedia() to find
     // our camera and microphone and add that stream to the connection for
@@ -122,9 +222,8 @@ export default function Home() {
       };
     }
 
-    // Called by the WebRTC layer when events occur on the media tracks
-    // on our WebRTC call. This includes when streams are added to and
-    // removed from the call.
+    // Called by the WebRTC layer when events occur on the media tracks on our WebRTC call.
+    // This includes when streams are added to and removed from the call.
     //
     // track events include the following fields:
     //
@@ -133,8 +232,7 @@ export default function Home() {
     // MediaStream[]        streams
     // RTCRtpTransceiver    transceiver
     //
-    // In our case, we're just taking the first stream found and attaching
-    // it to the <video> element for incoming media.
+    // In our case, we're just taking the first stream found and attaching it to the <video> element for incoming media.
 
     const handleTrackEvent = (event) => {
       console.log("*** Track event");
@@ -158,9 +256,7 @@ export default function Home() {
       }
     }
 
-    // Handle |iceconnectionstatechange| events. This will detect
-    // when the ICE connection is closed, failed, or disconnected.
-    //
+    // Handle |iceconnectionstatechange| events. This will detect when the ICE connection is closed, failed, or disconnected.
     // This is called when the state of the ICE agent changes.
 
     const handleICEConnectionStateChangeEvent = (event) => {
@@ -179,9 +275,7 @@ export default function Home() {
     // Set up a |signalingstatechange| event handler. This will detect when
     // the signaling connection is closed.
     //
-    // NOTE: This will actually move to the new RTCPeerConnectionState enum
-    // returned in the property RTCPeerConnection.connectionState when
-    // browsers catch up with the latest version of the specification!
+    // NOTE: This will actually move to the new RTCPeerConnectionState enum returned in the property RTCPeerConnection.connectionState when browsers catch up with the latest version of the specification!
 
     const handleSignalingStateChangeEvent = (event) => {
       console.log("*** WebRTC signaling state changed to: " + myPeerConnection.signalingState);
@@ -246,6 +340,35 @@ export default function Home() {
 
       // targetID = null;
     }
+
+    function handleHangUpMsg(msg) {
+      console.log("*** Received hang up notification from other peer");
+
+      closeVideoCall();
+    }
+
+    // Hang up the call by closing our end of the connection, then
+    // sending a "hang-up" message to the other peer (keep in mind that
+    // the signaling is done on a different connection). This notifies
+    // the other peer that the connection should be terminated and the UI
+    // returned to the "no call in progress" state.
+
+    function hangUpCall() {
+      closeVideoCall();
+
+      sendToServer({
+        name: myID,
+        target: targetID,
+        type: "hang-up"
+      });
+    }
+
+    // Handle a click on an item in the user list by inviting the clicked
+    // user to video chat. Note that we don't actually send a message to
+    // the callee here -- calling RTCPeerConnection.addTrack() issues
+    // a |notificationneeded| event, so we'll let our handler for that
+    // make the offer.
+
 
     const invite = async (msg) => {
       console.log('Matching ', msg.caller, msg.responder);
