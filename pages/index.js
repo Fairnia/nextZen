@@ -6,6 +6,9 @@ import React, { useEffect, useState, useRef } from 'react';
 
 export default function Home() {
 
+  const [userId, setUserId] = useState("user1");
+  const [partnerId, setpartnerId] = useState("user2");
+
   const userVideo = useRef();
   const partnerVideo = useRef();
 
@@ -24,6 +27,11 @@ export default function Home() {
   // myHostname = "localhost";
   // }
 
+  const changeUser = () =>{
+    setUserId("user2")
+  } 
+
+
   const createUser = async () =>{
     await fetch('/api/signaling',{
       method: 'POST',
@@ -35,8 +43,34 @@ export default function Home() {
     .then(data => console.log(data));  
   } 
 
+  const sendToS3 = async (data) =>{
+    await fetch('/api/signaling',{
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    .then(response => response.json())
+    .then(data => console.log(
+      "this is from sendtos3: ", data));  
+  }
+
   const getUser = async () =>{
     await fetch('/api/signaling',{
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    }).then(response => {
+      return response.json(); 
+    }).then(data =>{
+      console.log("this is the dataa ", data)
+    });  
+  } 
+
+  const getUserData = async () =>{
+    await fetch(`/api/signaling/${userId}`,{
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -53,8 +87,6 @@ export default function Home() {
   //******** Actual Matching and WebRTC stuff *******
 
   var connection = null;
-  var myId;
-  var partnerId;
   var myUsername = null;
   //webrtc vars
   var myID = null;
@@ -68,16 +100,6 @@ export default function Home() {
 
     connection = new WebSocket(serverUrl, "json"); // this needs to be changed into the long polling function
 
-    connection.onerror = function(evt) {
-      console.dir(evt);
-    }
-    connection.onopen = function(evt) {
-      //send username asap, once connection as been made
-      sendToServer({
-        text: usernameInput,
-        type: "username"
-      });
-    };
     connection.onmessage = function(evt) {
       var msg = JSON.parse(evt.data);
       console.log("Message received: ");
@@ -91,14 +113,12 @@ export default function Home() {
           break;
         case "matched":
           if(msg.user1.id === myId){
-            partnerId = msg.user2.id
             username.innerText = msg.user1.username;
             partnerName.innerText = msg.user2.username;
             prevUsersArrayel.innerText = msg.user1.prevMatched;
             console.log('called from match user1')
             invite(msg);
           }else{
-            partnerId = msg.user1.id
             username.innerText = msg.user2.username;
             partnerName.innerText = msg.user1.username;
             prevUsersArrayel.innerText = msg.user2.prevMatched;
@@ -113,7 +133,6 @@ export default function Home() {
           break;
         case "matching":
           closeVideoCall();
-          partnerId = null;
           alreadyGreeting = false;
           findingPartnerel.style.display = "block"
           newPartnerel.style.display = "none"
@@ -170,8 +189,6 @@ export default function Home() {
         ]
       });
 
-      console.log("this is my peer connection ", myPeerConnection)
-
       // Set up event handlers for the ICE negotiation process.
 
       myPeerConnection.onicecandidate = handleICECandidateEvent;
@@ -207,14 +224,14 @@ export default function Home() {
         console.log("---> Setting local description to the offer");
         await myPeerConnection.setLocalDescription(offer);
 
-        // Send the offer to the remote peer.
+        // Send the offer to the remote peer. video-offer
 
         console.log("---> Sending the offer to the remote peer");
-        sendToServer({
-          name: myID, // myID needs to be my s3 bucket key > will be added to 
-          target: targetID, // targetID needs to be my partners s3 bucket key
+        sendToS3({
+          name: userId, // myID needs to be my s3 bucket key > will be added to 
+          target: partnerId, // targetID needs to be my partners s3 bucket key
           type: "video-offer", // type will be added to the key 
-          sdp: myPeerConnection.localDescription // body
+          body: myPeerConnection.localDescription // body
         });
       } catch(err) {
         console.log("*** The following error occurred while handling the negotiationneeded event:");
@@ -247,12 +264,12 @@ export default function Home() {
       if (event.candidate) {
         console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
 
-        sendToServer({
-          name: myID, // myID needs to be my s3 bucket key > will be added to 
-          target: targetID, // my partner's id in AWS
-          type: "new-ice-candidate", // to be added to the key 
-          candidate: event.candidate
-        });
+        // sendToS3({
+        //   name: userId , // myID needs to be my s3 bucket key > will be added to 
+        //   target: partnerId, // my partner's id in AWS
+        //   type: "new-ice-candidate", // to be added to the key 
+        //   body: event.candidate
+        // });
       }
     }
 
@@ -356,7 +373,7 @@ export default function Home() {
     function hangUpCall() {
       closeVideoCall();
 
-      sendToServer({
+      sendToS3({
         name: myID,
         target: targetID,
         type: "hang-up"
@@ -369,7 +386,7 @@ export default function Home() {
     // a |notificationneeded| event, so we'll let our handler for that
     // make the offer.
 
-
+    // user1 always invites user2
     const invite = async (msg) => {
       console.log('Matching ', msg.caller, msg.responder);
       console.log("Starting to prepare an invitation ", myPeerConnection, !myPeerConnection);
@@ -379,8 +396,8 @@ export default function Home() {
         // var partner = msg.target;
         // Record the username being called for future reference
 
-        var targetID = msg.responder;
-        var myID = msg.caller;
+        var targetID = partnerId; // user2
+        var myID = userId; // user1
         var webcamStream = null;
 
         // Call createPeerConnection() to create the RTCPeerConnection.
@@ -471,11 +488,11 @@ export default function Home() {
 
       await myPeerConnection.setLocalDescription(await myPeerConnection.createAnswer());
 
-      sendToServer({
-        name: myID, // my key in AWS
-        target: targetID, // my partner's key in AWS
+      sendToS3({
+        name: userId, // my key in AWS
+        target: partnerId, // my partner's key in AWS
         type: "video-answer", // to be added to my partners key in AWS
-        sdp: myPeerConnection.localDescription
+        body: myPeerConnection.localDescription
       });
     }
 
@@ -545,15 +562,6 @@ export default function Home() {
       console.error(`Error ${errMessage.name}: ${errMessage.message}`);
     }
 
-    function sendToServer(msg) {
-      var msgJSON = JSON.stringify(msg);
-
-      console.log("Sending '" + msg.type + "' message: " + msgJSON);
-      if(connection){
-        connection.send(msgJSON);
-      }
-    }
-
   
 
   return (
@@ -604,7 +612,19 @@ export default function Home() {
             })}}>Invite a user</a>
 
               <div className={styles.homeText}>
+
+                <br></br>
+                USER: {userId}
+                <br></br>
+              
+              <label>
+                  <input type="checkbox" onChange={changeUser} />
+                  Click to be user2
+              </label>
+                          
               <video playsInline muted ref={userVideo} autoPlay className={""} />
+
+
 
               </div>
             </div>

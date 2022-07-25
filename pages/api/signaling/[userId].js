@@ -15,7 +15,7 @@ export default async function handler(req, res) {
    
     if (req.method === 'POST') {
     // const objectKey = `${orderId}/${uuid()}.png`;
-    const objectKey = `grabby`;
+    const objectKey = `user1`;
     
     const user = await s3Client.send(new PutObjectCommand({
       Bucket: objectBucket,
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     
       const data = await s3Client.send(new GetObjectCommand({
         Bucket: objectBucket,
-        Key: "testuser.json",
+        Key: "user1",
       }));
 
       const dataBody = new Response(data.Body);
