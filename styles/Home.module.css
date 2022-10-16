@@ -96,3 +96,11 @@
     flex-direction: column;
   }
 }
+
+.partnerVideo {
+  border: 1px solid green;
+}
+
+.userVideo {
+  border: 1px solid black;
+}

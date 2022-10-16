@@ -9,9 +9,8 @@ export default function Home() {
   const [userId, setUserId] = useState("user1");
   const [partnerId, setpartnerId] = useState("user2");
 
-
-  var otherVideo = useRef();
-  var userVideo = useRef();
+  const userVideo = useRef();
+  const partnerVideo = useRef();
 
   const mediaConstraints = {
     audio: true,            // We want an audio track
@@ -29,8 +28,7 @@ export default function Home() {
   // }
 
   const changeUser = () => {
-    setUserId("user2");
-    setpartnerId("user1");
+    setUserId("user2")
   }
 
 
@@ -42,7 +40,7 @@ export default function Home() {
       },
     })
       .then(response => response.json())
-    // .then(data => console.log(data));
+      .then(data => console.log(data));
   }
 
   const sendToS3 = async (data) => {
@@ -54,11 +52,11 @@ export default function Home() {
       },
     })
       .then(response => response.json())
-    // .then(data => console.log(
-    //   "this is from sendtos3: ", data));
+      .then(data => console.log(
+        "this is from sendtos3: ", data));
   }
 
-  const getFromS3 = async () => {
+  const getUser = async () => {
     await fetch('/api/signaling', {
       method: 'GET',
       headers: {
@@ -67,34 +65,7 @@ export default function Home() {
     }).then(response => {
       return response.json();
     }).then(data => {
-      //console.log("this is the data from signaling", data)
-    });
-  }
-
-  const putUsers = async () => {
-    await fetch('/api/users', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-    }).then(response => {
-      //console.log("response ", response)
-      return response.text;
-    }).then(data => {
-      //console.log("this is the data from users ", data)
-    });
-  }
-
-  const getUsers = async () => {
-    await fetch('/api/users', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-    }).then(response => {
-      return response.json();
-    }).then(data => {
-      //console.log("this is the dataa ", data)
+      console.log("this is the dataa ", data)
     });
   }
 
@@ -107,49 +78,8 @@ export default function Home() {
     }).then(response => {
       return response.json();
     }).then(data => {
-      //console.log("this is the data ", data)
+      console.log("this is the dataa ", data)
     });
-  }
-
-  const checkForStuff = async (data) => {
-    async function subscribe() {
-      let response = await fetch(`/api/signaling?key=${data}`);
-
-      if (response.status == 502) {
-        //console.log(" got a 502 status")
-        await subscribe();
-      } else if (response.status != 200) {
-        // An error - let's show it
-        //console.log(response.statusText);
-        // Reconnect in one second
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await subscribe();
-      } else {
-        // Get and show the message
-        let message = await response.json();
-        //console.log(message);
-        if (message.type === 'video-offer') {
-          console.log("checkedforstuff video offer ", message)
-          handleVideoOfferMsg(message);
-        }
-        if (message.type === 'video-answer') {
-          console.log("checkedforstuff video answer ", message)
-          handleVideoAnswerMsg(message);
-        }
-        if (message.type === 'new-ice-candidate') {
-          let msg = message.body
-          console.log("checkedforstuff new ice message ", typeof msg, msg)
-          if (msg.candidate !== '') {
-            handleNewICECandidateMsg(msg);
-          } else {
-            await subscribe();
-          }
-        }
-        // Call subscribe() again to get the next message
-      }
-    }
-
-    subscribe();
   }
 
 
@@ -166,7 +96,76 @@ export default function Home() {
   var webcamStream = null;
   var alreadyGreeting = false;
 
+  function connect() {
 
+    connection = new WebSocket(serverUrl, "json"); // this needs to be changed into the long polling function
+
+    connection.onmessage = function (evt) {
+      var msg = JSON.parse(evt.data);
+      console.log("Message received: ");
+      console.dir(msg);
+
+      switch (msg.type) {
+        case "id":
+          myId = msg.id
+          userIdel.innerText = myId;
+          console.log('id');
+          break;
+        case "matched":
+          if (msg.user1.id === myId) {
+            username.innerText = msg.user1.username;
+            partnerName.innerText = msg.user2.username;
+            prevUsersArrayel.innerText = msg.user1.prevMatched;
+            console.log('called from match user1')
+            invite(msg);
+          } else {
+            username.innerText = msg.user2.username;
+            partnerName.innerText = msg.user1.username;
+            prevUsersArrayel.innerText = msg.user2.prevMatched;
+          }
+          findingPartnerel.style.display = "none"
+          newPartnerel.style.display = "block"
+          // will have to put set time out somewhere else if user1 going to invite
+          // setTimeout(()=>{
+          //   findNewPartner(myId)
+          // },6000)
+          //user1 will always disconnect
+          break;
+        case "matching":
+          closeVideoCall();
+          alreadyGreeting = false;
+          findingPartnerel.style.display = "block"
+          newPartnerel.style.display = "none"
+          break;
+        case "banned":
+          window.location.href = "/banned.html";
+          connection.close();
+          break;
+        case "video-offer":  // Invitation and offer to chat
+          console.log('video offer message recieved')
+          handleVideoOfferMsg(msg);
+          break;
+        case "video-answer":  // Callee has answered our offer
+          handleVideoAnswerMsg(msg);
+          break;
+        case "new-ice-candidate": // A new ICE candidate has been received
+          console.log("NEW ICE CANDIDATE ", iceCounter++)
+          startGreetingSession();
+          handleNewICECandidateMsg(msg);
+          break;
+        case "hang-up": // The other peer has hung up the call
+          closeVideoCall();
+          break;
+
+        // Unknown message; output to console for debugging.
+        default:
+          console.log("Unknown message received:");
+          console.log('unknown message on refresh');
+          console.dir(msg, { depth: null });
+        //console.error(msg);
+      }
+    };
+  }
 
   // Create the RTCPeerConnection which knows how to talk to our
   // selected STUN/TURN server and then uses getUserMedia() to find
@@ -175,7 +174,7 @@ export default function Home() {
   // needed notifications on the call.
   var myPeerConnection = null;
   const createPeerConnection = async () => {
-    //console.log("Setting up a connection...");
+    console.log("Setting up a connection...");
 
     // Create an RTCPeerConnection which knows to use our chosen
     // STUN server.
@@ -204,10 +203,10 @@ export default function Home() {
   // begin, resume, or restart ICE negotiation.
 
   const handleNegotiationNeededEvent = async () => {
-    //console.log("*** Negotiation needed");
+    console.log("*** Negotiation needed");
 
     try {
-      //console.log("---> Creating offer");
+      console.log("---> Creating offer");
       const offer = await myPeerConnection.createOffer();
 
       // If the connection hasn't yet achieved the "stable" state,
@@ -215,37 +214,27 @@ export default function Home() {
       // will be fired when the state stabilizes.
 
       if (myPeerConnection.signalingState != "stable") {
-        //console.log("     -- The connection isn't stable yet; postponing...")
+        console.log("     -- The connection isn't stable yet; postponing...")
         return;
       }
 
       // Establish the offer as the local peer's current
       // description.
 
-      // //console.log("---> Setting local description to the offer"); 
+      console.log("---> Setting local description to the offer");
       await myPeerConnection.setLocalDescription(offer);
 
       // Send the offer to the remote peer. video-offer
 
-      //console.log("---> Sending the video-offer to the remote peer ", myPeerConnection.localDescription);
-      console.log("video-offer userID ", userId, myPeerConnection.localDescription)
-      console.log("video-offer partnerID ", partnerId)
-      if (userId == 'user1') {
-
-        sendToS3({
-          name: userId, // myID needs to be my s3 bucket key > will be added to 
-          target: partnerId, // targetID needs to be my partners s3 bucket key
-          type: "video-offer", // type will be added to the key 
-          body: myPeerConnection.localDescription // body
-        });
-        checkForStuff(`${userId}/currentPartner`)
-      } else {
-        // checkForStuff(`${userId}/currentPartner`)
-
-      }
-
+      console.log("---> Sending the offer to the remote peer");
+      sendToS3({
+        name: userId, // myID needs to be my s3 bucket key > will be added to 
+        target: partnerId, // targetID needs to be my partners s3 bucket key
+        type: "video-offer", // type will be added to the key 
+        body: myPeerConnection.localDescription // body
+      });
     } catch (err) {
-      //console.log("*** The following error occurred while handling the negotiationneeded event:");
+      console.log("*** The following error occurred while handling the negotiationneeded event:");
       reportError(err);
     };
   }
@@ -263,19 +252,9 @@ export default function Home() {
   // In our case, we're just taking the first stream found and attaching it to the <video> element for incoming media.
 
   const handleTrackEvent = (event) => {
-    //console.log("*** Track event ", event.streams[0]);
-    otherVideo.current.srcObject = event.streams[0];
-
+    console.log("*** Track event");
+    userVideo.current.srcObject = event.streams[0];
   }
-
-  // ​
-  // active: true
-  // ​
-  // id: "{c922a163-a05b-4d89-83a8-7998563d9ce3}"
-  // ​
-  // onaddtrack: null
-  // ​
-  // onremovetrack: null
 
   // Handles |icecandidate| events by forwarding the specified
   // ICE candidate (created by our local ICE agent) to the other
@@ -283,16 +262,14 @@ export default function Home() {
 
   const handleICECandidateEvent = (event) => {
     if (event.candidate) {
-      console.log("new-ice-candidate userID ", userId)
-      console.log("new-ice-candidate partnerID ", partnerId)
-      // console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
-      // ff here
-      sendToS3({
-        name: userId, // myID needs to be my s3 bucket key > will be added to 
-        target: partnerId, // my partner's id in AWS
-        type: "new-ice-candidate", // to be added to the key 
-        body: event.candidate
-      });
+      console.log("*** Outgoing ICE candidate: " + event.candidate.candidate);
+
+      // sendToS3({
+      //   name: userId , // myID needs to be my s3 bucket key > will be added to 
+      //   target: partnerId, // my partner's id in AWS
+      //   type: "new-ice-candidate", // to be added to the key 
+      //   body: event.candidate
+      // });
     }
   }
 
@@ -300,13 +277,13 @@ export default function Home() {
   // This is called when the state of the ICE agent changes.
 
   const handleICEConnectionStateChangeEvent = (event) => {
-    //console.log("*** ICE connection state changed to " + myPeerConnection.iceConnectionState);
+    console.log("*** ICE connection state changed to " + myPeerConnection.iceConnectionState);
 
     switch (myPeerConnection.iceConnectionState) {
       case "closed":
       case "failed":
       case "disconnected":
-        //console.log('VIDEO CALL CLOOOOOSED')
+        console.log('VIDEO CALL CLOOOOOSED')
         hangUpCall();
         break;
     }
@@ -318,7 +295,7 @@ export default function Home() {
   // NOTE: This will actually move to the new RTCPeerConnectionState enum returned in the property RTCPeerConnection.connectionState when browsers catch up with the latest version of the specification!
 
   const handleSignalingStateChangeEvent = (event) => {
-    //console.log("*** WebRTC signaling state changed to: " + myPeerConnection.signalingState);
+    console.log("*** WebRTC signaling state changed to: " + myPeerConnection.signalingState);
     switch (myPeerConnection.signalingState) {
       case "closed":
         closeVideoCall();
@@ -333,11 +310,11 @@ export default function Home() {
   // alternate between "gathering" and "complete" repeatedly as needs and
   // circumstances change.
   //
-  // We don't need to do anything when this happens, but we //console.log it to the
+  // We don't need to do anything when this happens, but we console.log it to the
   // console so you can see what's going on when playing with the sample.
 
   const handleICEGatheringStateChangeEvent = (event) => {
-    //console.log("*** ICE gathering state changed to: " + myPeerConnection.iceGatheringState);
+    console.log("*** ICE gathering state changed to: " + myPeerConnection.iceGatheringState);
   }
 
 
@@ -347,7 +324,7 @@ export default function Home() {
   // failure is detected.
 
   const closeVideoCall = () => {
-    //console.log('video call closed')
+    console.log('video call closed')
     // var remoteVideo = document.getElementById("received_video");
     // var localVideo = document.getElementById("local_video");
 
@@ -382,7 +359,7 @@ export default function Home() {
   }
 
   function handleHangUpMsg(msg) {
-    //console.log("*** Received hang up notification from other peer");
+    console.log("*** Received hang up notification from other peer");
 
     closeVideoCall();
   }
@@ -410,8 +387,9 @@ export default function Home() {
   // make the offer.
 
   // user1 always invites user2
-  const invite = async () => {
-    //console.log("Starting to prepare an invitation ", myPeerConnection, !myPeerConnection);
+  const invite = async (msg) => {
+    console.log('Matching ', msg.caller, msg.responder);
+    console.log("Starting to prepare an invitation ", myPeerConnection, !myPeerConnection);
     if (myPeerConnection) {
       alert("You can't start a call because you already have one open!");
     } else {
@@ -434,10 +412,7 @@ export default function Home() {
 
       try {
         webcamStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-
-        //console.log('webcamstream ', webcamStream)
-        userVideo.current.srcObject = webcamStream;
-
+        // userVideo.current.srcObject = webcamStream;
       } catch (err) {
         handleGetUserMediaError(err);
         return;
@@ -463,7 +438,7 @@ export default function Home() {
     // If we're not already connected, create an RTCPeerConnection
     // to be linked to the caller.
 
-    //console.log("Received video chat offer from " + targetID);
+    console.log("Received video chat offer from " + targetID);
     if (!myPeerConnection) {
       createPeerConnection();
     }
@@ -471,12 +446,12 @@ export default function Home() {
     // We need to set the remote description to the received SDP offer
     // so that our local WebRTC layer knows how to talk to the caller.
 
-    var desc = new RTCSessionDescription(msg.body);
+    var desc = new RTCSessionDescription(msg.sdp);
 
     // If the connection isn't stable yet, wait for it...
 
     if (myPeerConnection.signalingState != "stable") {
-      //console.log("  - But the signaling state isn't stable, so triggering rollback");
+      console.log("  - But the signaling state isn't stable, so triggering rollback");
 
       // Set the local and remove descriptions for rollback; don't proceed
       // until both return.
@@ -486,7 +461,7 @@ export default function Home() {
       ]);
       return;
     } else {
-      // //console.log("  - Setting remote description");
+      console.log("  - Setting remote description");
       await myPeerConnection.setRemoteDescription(desc);
     }
 
@@ -499,9 +474,7 @@ export default function Home() {
       return;
     }
 
-
-    // otherVideo.current.srcObject = webcamStream;
-    userVideo.current.srcObject = webcamStream;
+    // userVideo.current.srcObject = webcamStream;
 
     // Add the camera stream to the RTCPeerConnection
 
@@ -511,37 +484,29 @@ export default function Home() {
       handleGetUserMediaError(err);
     }
 
-    // //console.log("---> Creating and sending answer to caller");
+    console.log("---> Creating and sending answer to caller");
 
     await myPeerConnection.setLocalDescription(await myPeerConnection.createAnswer());
-    console.log("video-answer userID ", userId, myPeerConnection.localDescription)
-    console.log("video-answer partnerID ", partnerId)
+
     sendToS3({
       name: userId, // my key in AWS
       target: partnerId, // my partner's key in AWS
       type: "video-answer", // to be added to my partners key in AWS
       body: myPeerConnection.localDescription
     });
-    // checkForStuff(`${userId}/currentPartner/new-ice-candidate`)
-
-
   }
 
   // Responds to the "video-answer" message sent to the caller
   // once the callee has decided to accept our request to talk.
 
   const handleVideoAnswerMsg = async (msg) => {
-    //console.log("*** Call recipient has accepted our call");
-    const webrtc = msg.body;
-
-    //console.log("got video answer from partner ", msg.body)
+    console.log("*** Call recipient has accepted our call");
 
     // Configure the remote description, which is the SDP payload
     // in our "video-answer" message.
 
-    var desc = new RTCSessionDescription(webrtc);
+    var desc = new RTCSessionDescription(msg.sdp);
     await myPeerConnection.setRemoteDescription(desc).catch(reportError);
-    checkForStuff(`${userId}/currentPartner/new-ice-candidate`)
   }
 
   // A new ICE candidate has been received from the other peer. Call
@@ -549,11 +514,9 @@ export default function Home() {
   // local ICE framework.
 
   const handleNewICECandidateMsg = async (msg) => {
+    var candidate = new RTCIceCandidate(msg.candidate);
 
-    //console.log("handleNewICECandidateMsg msg ", msg)
-    var candidate = new RTCIceCandidate(msg);
-
-    //console.log("*** Adding received ICE candidate: " + JSON.stringify(candidate));
+    console.log("*** Adding received ICE candidate: " + JSON.stringify(candidate));
     try {
       await myPeerConnection.addIceCandidate(candidate)
     } catch (err) {
@@ -604,27 +567,56 @@ export default function Home() {
   return (
     <>
       <div className={styles.container}>
+        <Particles
+          params={{
+            "particles": {
+              "number": {
+                "value": 70,
+                "density": {
+                  "enable": true,
+                  "value_area": 800
+                }
+              },
+              "color": {
+                "value": "#ffffff",
+                "opacity": 1
+              },
+              "move": {
+                "random": true,
+                "speed": 1,
+                "direction": "random",
+              },
+              "size": {
+                "value": 3,
+                "random": true,
+                "anim": {
+                  "speed": 3,
+                  "size_min": 0.3
+                }
+              },
+            },
+          }
+          }
+        />
         <div className={styles.page}>
           <Header />
           <div className={styles.main}>
             <Link href="/connect">
               <a>Start ZenGreeting</a>
             </Link>
-            <a onClick={createUser}>Create a matched bucket</a>
-            <a onClick={getFromS3}>Get a user from S3 signaling</a>
-            <a onClick={putUsers}>PUT Users</a>
-            <a onClick={getUsers}>Get Users</a>
-            <a onClick={() => checkForStuff(`${userId}/currentPartner`)}>Check for video offer</a>
-
+            <a onClick={createUser}>Create a user</a>
+            <a onClick={getUser}>Get a user</a>
             <a onClick={() => {
-              invite()
-            }}>Invite function</a>
+              invite({
+                caller: "123",
+                responder: "456",
+              })
+            }}>Invite a user</a>
 
             <div className={styles.homeText}>
 
               <br></br>
-              USER: {userId}<br></br>
-              Partner: {partnerId}
+              USER: {userId}
               <br></br>
 
               <label>
@@ -632,15 +624,11 @@ export default function Home() {
                 Click to be user2
               </label>
 
+              <video playsInline muted ref={userVideo} autoPlay className={""} />
 
-              <video ref={userVideo} autoPlay className={"userVideo"} />
 
-              <div className={styles.userVideo}>
-                <video ref={otherVideo} autoPlay className={"otherVideo"} />
-              </div>
 
             </div>
-
           </div>
 
         </div>
