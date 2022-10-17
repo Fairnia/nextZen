@@ -1,18 +1,17 @@
 import { v4 as uuid } from 'uuid';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectsCommand, ListObjectsCommand } from "@aws-sdk/client-s3";
 
 const objectBucket = process.env.ZENGREET_USERS_BUCKET;
 const bucketRegion = process.env.ZENGREET_USERS_BUCKET_REGION;
 const s3Client = new S3Client({
   region: "us-west-1",
   credentials: {
-    accessKeyId: "AKIAWZJQJI5O6KYEPUKP",
-    secretAccessKey: "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",
+    accessKeyId: process.env.ZENGREET_AWS_ACCESS,
+    secretAccessKey: process.env.ZENGREET_AWS_SECRET,
   }
 });
 
 export default async function handler(req, res) {
-
   const msg = req.body
 
   console.log("this is message target ", msg)
@@ -66,6 +65,34 @@ export default async function handler(req, res) {
 
     return res.status(200).json(resStr)
 
+  }
+
+  if (req.method === "DELETE") {
+
+    try {
+      const bucketParams = { Bucket: "zengreet.users" };
+
+      const data = await s3Client.send(new ListObjectsCommand(bucketParams));
+      const deletingParams = {
+        Bucket: "zengreet.users",
+        Delete: {
+          Objects: data.Contents.map(object => {
+            return {
+              Bucket: "zengreet.users",
+              Key: object.Key,
+              VersionId: 'null',
+            }
+          })
+        }
+      }
+      const deleting = await s3Client.send(new DeleteObjectsCommand(deletingParams));
+
+      console.log("Delete result", deleting);
+
+      return res.status(201).json({ message: 'All dem tings deleted' })
+    } catch (error) {
+      return res.status(500).json({ error: error })
+    }
   }
 
 }

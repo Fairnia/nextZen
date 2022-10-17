@@ -59,6 +59,24 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: error })
     }
   }
+
+  if (req.method === "DELETE") {
+
+    console.log("this is from users PUT")
+    const putBody = JSON.stringify({
+      "yobodykey": "yobody field"
+    })
+    try {
+      await s3Client.send(new PutObjectCommand({
+        Bucket: "zengreet.users",
+        Key: "BUTIWILLNOTDOTHAT/hella",
+        Body: putBody,
+      }));
+      return res.status(201).json({ message: 'File processed' })
+    } catch (error) {
+      return res.status(500).json({ error: error })
+    }
+  }
 }
 
 // NEXT Steps
