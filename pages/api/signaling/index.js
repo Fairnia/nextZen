@@ -73,6 +73,10 @@ export default async function handler(req, res) {
       const bucketParams = { Bucket: "zengreet.users" };
 
       const data = await s3Client.send(new ListObjectsCommand(bucketParams));
+      if (data.Contents.length < 1) {
+        return res.status(200).json({ message: 'Nothing to delete' })
+      }
+
       const deletingParams = {
         Bucket: "zengreet.users",
         Delete: {
@@ -89,7 +93,7 @@ export default async function handler(req, res) {
 
       console.log("Delete result", deleting);
 
-      return res.status(201).json({ message: 'All dem tings deleted' })
+      return res.status(200).json({ message: 'All dem tings deleted' })
     } catch (error) {
       return res.status(500).json({ error: error })
     }
