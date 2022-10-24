@@ -73,6 +73,7 @@ export default async function handler(req, res) {
       const bucketParams = { Bucket: "zengreet.users" };
 
       const data = await s3Client.send(new ListObjectsCommand(bucketParams));
+      console.log("data from delete ", data)
       if (data.Contents.length < 1) {
         return res.status(200).json({ message: 'Nothing to delete' })
       }
