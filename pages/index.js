@@ -167,6 +167,12 @@ export default function Home() {
             <a onClick={deleteAllUsers}>Delete Users</a>
             <a onClick={async () => {
               await PeerConnection.create(userId, partnerId);
+              PeerConnection.events.on('local.stream.received', (stream) => {
+                userVideo.current.srcObject = stream;
+              })
+              PeerConnection.events.on('partner.stream.received', (stream) => {
+                otherVideo.current.srcObject = stream;
+              })
               // await PeerConnection.checkForStuff(`${userId}/currentPartner`);
             }}>Check for video offer</a>
 
